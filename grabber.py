@@ -1,3 +1,4 @@
+from http import cookies
 from seleniumwire import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
@@ -11,9 +12,10 @@ from ctypes import windll
 from urllib3 import disable_warnings
 from os import system
 from asyncio import set_event_loop_policy, WindowsSelectorEventLoopPolicy
+from time import sleep
 
 if platform == "win32" and (3, 8, 0) <= version_info < (3, 9, 0):
-    set_event_loop_policy(WindowsSelectorEventLoopPolicy())
+	set_event_loop_policy(WindowsSelectorEventLoopPolicy())
 
 class Wrong_Username_or_Email(BaseException):
 	def __init__(self, message):
@@ -91,42 +93,71 @@ def mainth(data):
 			wait.until(EC.presence_of_element_located((By.XPATH, '//input[@autocomplete="username"]'))).send_keys(email)
 			wait.until(EC.element_to_be_clickable((By.XPATH, '//span[text()="Next"]'))).click()
 
-			try:
-				WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//span[text()="Phone or username"]'))).send_keys(two_fa_info)
+			for _ in range(20):
+				try:
+					driver.find_element(By.XPATH, '//span[text()="Phone or username"]').send_keys(two_fa_info)
 
-			except exceptions.TimeoutException:
-				pass
+				except exceptions.NoSuchElementException:
+					pass
 
-			try:
-				WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//span[text()="Sorry, we could not find your account."]')))
+				try:
+					driver.find_element(By.XPATH, '//span[text()="Sorry, we could not find your account."]')
 
-				raise Wrong_Username_or_Email('Wrong Username/Email')
+					raise Wrong_Username_or_Email('Wrong Username/Email')
 
-			except exceptions.TimeoutException:
-				pass
+				except exceptions.NoSuchElementException:
+					pass
+
+				try:
+					driver.find_element(By.XPATH, '//input[@autocomplete="current-password"]')
+
+					break
+
+				except exceptions.NoSuchElementException:
+					pass
+
+				sleep(1)
 
 			wait.until(EC.presence_of_element_located((By.XPATH, '//input[@autocomplete="current-password"]'))).send_keys(password)
 			wait.until(EC.element_to_be_clickable((By.XPATH, '//span[text()="Log in"]'))).click()
 
-			try:
-				WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//span[text()="Wrong password!"]')))
+			for _ in range(20):
+				try:
+					driver.find_element(By.XPATH, '//span[text()="Wrong password!"]')
 
-				raise Wrong_Password('Wrong Password')
+					raise Wrong_Password('Wrong Password')
 
-			except exceptions.TimeoutException:
-				pass
+				except exceptions.NoSuchElementException:
+					pass
 
-			try:
-				WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.XPATH, '//span[text()="Confirmation code"]')))
+				try:
+					driver.find_element(By.XPATH, '//span[text()="Confirmation code"]')
 
-				raise Need_Confirmation_Code('Need confirmation code')
+					raise Need_Confirmation_Code('Need confirmation code')
 
-			except exceptions.TimeoutException:
-				pass
+				except exceptions.NoSuchElementException:
+					pass
+
+				try:
+					driver.find_element(By.CLASS_NAME, 'public-DraftEditorPlaceholder-inner')
+
+					break
+
+				except exceptions.NoSuchElementException:
+					pass
+
+				sleep(1)
 
 			wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'public-DraftEditorPlaceholder-inner')))
 
 		except Wrong_Username_or_Email as error:
+
+			try:
+				driver.quit()
+
+			except:
+				pass
+
 			with open('wrong_username_or_email.txt', 'a') as file:
 				file.write(f'{email}:{password}:{two_fa_info}\n')
 
@@ -135,6 +166,13 @@ def mainth(data):
 			return
 
 		except Wrong_Password as error:
+
+			try:
+				driver.quit()
+
+			except:
+				pass
+
 			with open('wrong_password.txt', 'a') as file:
 				file.write(f'{email}:{password}:{two_fa_info}\n')
 
@@ -143,6 +181,13 @@ def mainth(data):
 			return
 
 		except Need_Confirmation_Code as error:
+
+			try:
+				driver.quit()
+
+			except:
+				pass
+
 			with open('need_confirmation_code.txt', 'a') as file:
 				file.write(f'{email}:{password}:{two_fa_info}\n')
 
@@ -154,6 +199,13 @@ def mainth(data):
 			logger.error(f'{email}:{password}:{two_fa_info} | Unexpected error: {error}')
 
 		else:
+
+			try:
+				driver.quit()
+
+			except:
+				pass
+
 			with open('cookies.txt', 'a') as file:
 				file.write(f'{driver.get_cookies()}\n')
 
@@ -161,12 +213,17 @@ def mainth(data):
 
 			return
 
-		finally:
-			driver.quit()
+	try:
+		driver.quit()
+
+	except:
+		pass
+
+	with open('errors.txt', 'a') as file:
+		file.write(f'{data[0]}\n')
 
 if __name__ == '__main__':
 	clear()
-	logger.info(f'Loaded {len(accounts_data)} accounts | {len(proxies)} proxies\n')
 
 	if use_proxies == 'y':
 		while len(proxies) < len(accounts_data):
@@ -174,6 +231,8 @@ if __name__ == '__main__':
 
 	else:
 		proxies = [None for _ in range(len(accounts_data))]
+
+	logger.info(f'Loaded {len(accounts_data)} accounts | {len(proxies)} proxies\n')
 
 	pool = Pool(threads)
 	pool.map(mainth, list(zip(accounts_data, proxies)))
